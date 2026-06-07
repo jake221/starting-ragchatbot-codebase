@@ -29,8 +29,22 @@ All responses must be:
 Provide only the direct answer to what was asked.
 """
     
-    def __init__(self, api_key: str, model: str):
-        self.client = anthropic.Anthropic(api_key=api_key)
+    @staticmethod
+    def _extract_text(response) -> str:
+        """Extract text from a response, handling thinking blocks from DeepSeek-compatible APIs."""
+        for block in response.content:
+            if block.type == "text":
+                return block.text
+        # Fallback: return first block's text attribute, or string representation
+        if response.content:
+            return str(response.content[0].text) if hasattr(response.content[0], "text") else str(response.content[0])
+        return ""
+
+    def __init__(self, api_key: str, model: str, base_url: str = ""):
+        client_kwargs = {"api_key": api_key}
+        if base_url:
+            client_kwargs["base_url"] = base_url
+        self.client = anthropic.Anthropic(**client_kwargs)
         self.model = model
         
         # Pre-build base API parameters
@@ -84,7 +98,7 @@ Provide only the direct answer to what was asked.
             return self._handle_tool_execution(response, api_params, tool_manager)
         
         # Return direct response
-        return response.content[0].text
+        return self._extract_text(response)
     
     def _handle_tool_execution(self, initial_response, base_params: Dict[str, Any], tool_manager):
         """
@@ -132,4 +146,4 @@ Provide only the direct answer to what was asked.
         
         # Get final response
         final_response = self.client.messages.create(**final_params)
-        return final_response.content[0].text
+        return self._extract_text(final_response)
